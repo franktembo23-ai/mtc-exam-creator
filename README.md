@@ -2,7 +2,7 @@
 
 Mountain Tuition Centre - Firebase Sync PC/Phone Exam Builder
 
-Live: https://YOURUSERNAME.github.io/mtc-exam-creator/
+Live: https://franktembo23-ai.github.io/mtc-exam-creator/
 
 ## Files
 - index.html - main app (renamed from Diagram Creator Pro)
