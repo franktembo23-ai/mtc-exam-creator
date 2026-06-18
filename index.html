@@ -4183,7 +4183,22 @@ function teSaveRecord(rec) {
 }
 
 function renderPerfRecords() {
-  var records    = teGetRecords();
+  var records = teGetRecords();
+  
+  // Merge with cloud records if available
+  if (typeof cloudPerfRecords !== 'undefined' && cloudPerfRecords && cloudPerfRecords.length > 0) {
+    // Merge local and cloud, deduplicate by cloudId or timestamp
+    var merged = {};
+    for (var i = 0; i < records.length; i++) {
+      var key = records[i].cloudId || records[i].timestamp || ('local_' + i);
+      merged[key] = records[i];
+    }
+    for (var j = 0; j < cloudPerfRecords.length; j++) {
+      var ckey = cloudPerfRecords[j].cloudId || cloudPerfRecords[j].timestamp || ('cloud_' + j);
+      merged[ckey] = cloudPerfRecords[j];
+    }
+    records = Object.values(merged);
+  }
   var subjFilter = (document.getElementById('perf-subj-filter') || {}).value || '';
   var search     = ((document.getElementById('perf-search') || {}).value || '').toLowerCase();
 
@@ -5260,6 +5275,7 @@ function cloudConnect(cfg) {
     cloudSetStatus(true, 'Connected — Realtime Database (FREE) ✔');
     liveLoadPublishedExams();
     liveRefresh();
+    initPerfRecordsSync();
     showToast('Firebase Realtime Database connected!');
   } catch(e) {
     cloudSetStatus(false, 'Connection error: ' + e.message);
@@ -5484,6 +5500,61 @@ function liveRefresh() {
     var tableEl = document.getElementById('live-results-table');
     if (tableEl) tableEl.innerHTML = '<div style="color:#e74c3c;padding:12px;">Error: ' + err.message + '</div>';
   });
+}
+
+// ── Performance Records Cloud Sync ───────────────────────────────────────────
+var cloudPerfRecords = [];
+var perfUnsub = null;
+
+function initPerfRecordsSync() {
+  if (!cloudDB) return;
+  
+  // Unsubscribe previous listener
+  if (perfUnsub) {
+    try { cloudDB.ref('mtc_performance_records').off('value', perfUnsub); } catch(e) {}
+    perfUnsub = null;
+  }
+  
+  // Listen for real-time updates to performance records
+  perfUnsub = function(snapshot) {
+    var data = snapshot.val() || {};
+    cloudPerfRecords = [];
+    
+    // Convert Firebase object to array
+    for (var key in data) {
+      if (data.hasOwnProperty(key)) {
+        var rec = data[key];
+        rec.cloudId = key;
+        cloudPerfRecords.push(rec);
+      }
+    }
+    
+    // Sort by timestamp (newest first)
+    cloudPerfRecords.sort(function(a, b) {
+      return (b.timestamp || b.submittedAt || '').localeCompare(a.timestamp || a.submittedAt || '');
+    });
+    
+    // Re-render performance records
+    if (typeof renderPerfRecords === 'function') {
+      renderPerfRecords();
+    }
+    
+    // Update sync status
+    if (typeof addSyncLog === 'function') {
+      addSyncLog('info', 'Performance records synced: ' + cloudPerfRecords.length + ' total');
+    }
+  };
+  
+  cloudDB.ref('mtc_performance_records').on('value', perfUnsub, function(error) {
+    console.error('Performance records sync error:', error);
+    if (typeof addSyncLog === 'function') {
+      addSyncLog('error', 'Performance sync failed: ' + error.message);
+    }
+  });
+  
+  if (typeof addSyncLog === 'function') {
+    addSyncLog('success', 'Performance records cloud sync initialized');
+  }
 }
 
 function liveFilterResults() { liveRefresh(); }
