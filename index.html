@@ -509,6 +509,56 @@
       border-color: var(--gold);
       color: var(--gold);
     }
+
+    /* ECZ Short Answer Sub-Questions */
+    .sub-q-container {
+      background: #f8faff;
+      border: 1px solid #dde3f5;
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+    }
+    .sub-q-item {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .sub-q-item label {
+      min-width: 24px;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 0;
+      padding-top: 6px;
+    }
+    .sub-q-item input, .sub-q-item textarea {
+      flex: 1;
+    }
+    .sub-q-item .btn-danger {
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .ecz-automark-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 8px 0;
+      padding: 8px 12px;
+      background: rgba(26,122,63,0.08);
+      border-radius: 8px;
+      border: 1px solid rgba(26,122,63,0.2);
+    }
+    .ecz-automark-toggle label {
+      margin: 0;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .ecz-automark-toggle input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--success);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -1751,7 +1801,12 @@ function addQuestion(type) {
     ];
     q.correct = 'A';
   }
-  if (type === 'short') { q.answer = ''; q.marks = 3; }
+  if (type === 'short') {
+    q.answer = '';
+    q.marks = 3;
+    q.subQuestions = []; // array of {label, text, marks, answer}
+    q.eczAutoMark = false; // ECZ auto-mark flag
+  }
   if (type === 'essay') { q.marks = 10; q.guidance = ''; }
   examState.questions.push(q);
   renderQuestions();
@@ -1860,7 +1915,7 @@ function buildQuestionHTML(q, idx) {
       // Option image
       html += '<div style="margin-top:4px;">';
       if (opt.image) {
-        html += '<img id="opt-img-prev-' + qid + '-' + j + '" class="option-img-preview" src="' + opt.image + '" alt="option img" onclick="viewFullImage(this.src)">';
+        html += '<img id="opt-img-prev-' + qid + '-' + j + '" class="option-img-preview" src="' + opt.image + '" onclick="viewFullImage(this.src)">';
         html += '<div style="display:flex; gap:6px; margin-top:4px;">';
         html += '<button class="btn btn-navy btn-xs" onclick="triggerOptImg(' + qid + ',' + j + ')">&#8635; Replace</button>';
         html += '<button class="btn btn-danger btn-xs" onclick="removeOptImage(' + qid + ',' + j + ')">&#128465;</button>';
@@ -1892,8 +1947,46 @@ function buildQuestionHTML(q, idx) {
 
   // Short Answer
   if (q.type === 'short') {
+    // ECZ Auto Mark toggle
+    html += '<div class="ecz-automark-toggle">';
+    html += '<input type="checkbox" id="ecz-automark-' + qid + '" ' + (q.eczAutoMark ? 'checked' : '') + ' onchange="toggleEczAutoMark(' + qid + ', this.checked)">';
+    html += '<label for="ecz-automark-' + qid + '">&#127942; ECZ Auto Mark — 100% if answer matches exactly</label>';
+    html += '</div>';
+
+    // Sub-questions section
+    html += '<div style="margin-bottom:10px;">';
+    html += '<label style="display:flex; justify-content:space-between; align-items:center;">';
+    html += '<span>Sub-Questions <span style="color:#8899cc;font-weight:400;font-size:0.76rem;">— add parts like (a), (b), (c)</span></span>';
+    html += '<button class="btn btn-navy btn-xs" onclick="addSubQuestion(' + qid + ')">&#43; Add Part</button>';
+    html += '</label>';
+
+    if (q.subQuestions && q.subQuestions.length > 0) {
+      html += '<div class="sub-q-container">';
+      for (var si = 0; si < q.subQuestions.length; si++) {
+        var sq = q.subQuestions[si];
+        html += '<div class="sub-q-item" id="subq-' + qid + '-' + si + '">';
+        html += '<label style="min-width:24px;">(' + sq.label + ')</label>';
+        html += '<div style="flex:1; display:flex; flex-direction:column; gap:6px;">';
+        html += '<input type="text" placeholder="Sub-question text..." value="' + escHtml(sq.text) + '" oninput="updateSubQField(' + qid + ',' + si + ',&quot;text&quot;,this.value)">';
+        html += '<div style="display:flex; gap:8px; align-items:center;">';
+        html += '<span style="font-size:0.78rem;color:#5566a0;">Marks:</span>';
+        html += '<input type="number" style="width:60px; padding:4px 6px;" value="' + sq.marks + '" min="1" oninput="updateSubQField(' + qid + ',' + si + ',&quot;marks&quot;,parseInt(this.value)||1)">';
+        html += '<span style="font-size:0.78rem;color:#5566a0;">Answer:</span>';
+        html += '<input type="text" placeholder="Answer key..." value="' + escHtml(sq.answer) + '" oninput="updateSubQField(' + qid + ',' + si + ',&quot;answer&quot;,this.value)" style="flex:1;">';
+        html += '</div>';
+        html += '</div>';
+        html += '<button class="btn btn-danger btn-xs" onclick="removeSubQuestion(' + qid + ',' + si + ')" style="margin-top:4px;">&#215;</button>';
+        html += '</div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="color:#8899cc; font-size:0.8rem; padding:8px 12px; background:#f5f7ff; border-radius:6px; border:1px dashed #c5cde8; text-align:center;">No sub-parts added. Click "Add Part" to create sub-questions.</div>';
+    }
+    html += '</div>';
+
+    // Model Answer (legacy - kept for compatibility)
     html += '<div style="margin-bottom:6px;">';
-    html += '<label>Model Answer (for teacher copy)</label>';
+    html += '<label>Model Answer (for teacher copy — fallback)</label>';
     html += '<textarea placeholder="Enter the expected answer... (Ctrl+V to paste image into question)" oninput="updateQField(' + qid + ',&quot;answer&quot;,this.value)" data-paste-qid="' + qid + '" id="sans-' + qid + '">' + escHtml(q.answer||'') + '</textarea>';
     html += '</div>';
   }
@@ -1963,6 +2056,64 @@ function clearAllQuestions() {
     renderQuestions(); updateHeaderDisplay();
     closeModal(); showToast('All questions cleared');
   }, 'Yes, Clear All');
+}
+
+// ============================================================
+// SHORT ANSWER SUB-QUESTIONS
+// ============================================================
+function addSubQuestion(qid) {
+  for (var i=0; i<examState.questions.length; i++) {
+    if (examState.questions[i].id === qid) {
+      var q = examState.questions[i];
+      if (!q.subQuestions) q.subQuestions = [];
+      var label = String.fromCharCode(97 + q.subQuestions.length); // a, b, c, ...
+      q.subQuestions.push({ label: label, text: '', marks: 1, answer: '' });
+      renderQuestions();
+      showToast('Part (' + label + ') added!');
+      return;
+    }
+  }
+}
+
+function removeSubQuestion(qid, idx) {
+  for (var i=0; i<examState.questions.length; i++) {
+    if (examState.questions[i].id === qid) {
+      var q = examState.questions[i];
+      if (q.subQuestions && q.subQuestions.length > 0) {
+        q.subQuestions.splice(idx, 1);
+        // Re-label remaining sub-questions
+        for (var j = 0; j < q.subQuestions.length; j++) {
+          q.subQuestions[j].label = String.fromCharCode(97 + j);
+        }
+        renderQuestions();
+        showToast('Part removed');
+      }
+      return;
+    }
+  }
+}
+
+function updateSubQField(qid, idx, field, value) {
+  for (var i=0; i<examState.questions.length; i++) {
+    if (examState.questions[i].id === qid) {
+      var q = examState.questions[i];
+      if (q.subQuestions && q.subQuestions[idx]) {
+        if (field === 'marks') q.subQuestions[idx].marks = parseInt(value) || 1;
+        else q.subQuestions[idx][field] = value;
+      }
+      break;
+    }
+  }
+}
+
+function toggleEczAutoMark(qid, checked) {
+  for (var i=0; i<examState.questions.length; i++) {
+    if (examState.questions[i].id === qid) {
+      examState.questions[i].eczAutoMark = checked;
+      showToast(checked ? 'ECZ Auto Mark ENABLED — answers must match exactly' : 'ECZ Auto Mark disabled');
+      break;
+    }
+  }
 }
 
 // ============================================================
@@ -2382,8 +2533,20 @@ function generatePreview() {
       }
     }
     if (q.type === 'short') {
-      html += '<div style="margin-top:6px; border-bottom:1px solid #aaa; height:28px;"></div>';
-      html += '<div style="border-bottom:1px solid #aaa; height:28px; margin-top:4px;"></div>';
+      if (q.subQuestions && q.subQuestions.length > 0) {
+        for (var si = 0; si < q.subQuestions.length; si++) {
+          var sq = q.subQuestions[si];
+          html += '<div style="margin:6px 0 6px 18px;">';
+          html += '(<strong>' + sq.label + '</strong>) ' + (sq.text || '<em style="color:#aaa;">[empty]</em>');
+          html += ' <span style="font-size:0.75rem;color:#555;">[' + sq.marks + ' mark' + (sq.marks!==1?'s':'') + ']</span>';
+          html += '</div>';
+        }
+        // Answer section for teacher copy will be handled in print function
+        // But for preview, just show the sub-questions
+      } else {
+        html += '<div style="margin-top:6px; border-bottom:1px solid #aaa; height:28px;"></div>';
+        html += '<div style="border-bottom:1px solid #aaa; height:28px; margin-top:4px;"></div>';
+      }
     }
     if (q.type === 'essay') {
       for (var k=0; k<6; k++) html += '<div style="border-bottom:1px solid #bbb; height:26px; margin-top:4px;"></div>';
@@ -2412,9 +2575,13 @@ function buildPrintWindow(isTeacher) {
   content += '.header{text-align:center;border-bottom:3px double #0d1b4b;padding-bottom:12px;margin-bottom:12px;}';
   content += '.qblock{margin-bottom:16px;page-break-inside:avoid;}';
   content += '.answer-section{background:#e8f4e8;padding:8px;border-left:3px solid green;margin-top:6px;font-size:0.9em;}';
+  content += '.sub-answer{margin-left:18px;padding:4px 8px;background:#e8f4e8;border-left:2px solid #2e7d32;margin-top:2px;}';
   content += '.option{margin:3px 0 3px 18px;}.correct-opt{color:green;font-weight:bold;}';
   content += 'img.qimg{max-width:100%;max-height:280px;display:block;margin:8px auto;border:1px solid #ddd;border-radius:4px;}';
   content += 'img.oimg{max-width:140px;max-height:110px;vertical-align:middle;margin-left:4px;}';
+  content += '.sub-q{display:block;margin:4px 0 4px 18px;}';
+  content += '.sub-q-answer{margin-left:18px;padding:3px 8px;background:#e8f4e8;border-left:2px solid #2e7d32;}';
+  content += '.ecz-badge{background:#1a7a3f;color:white;padding:1px 8px;border-radius:4px;font-size:0.7rem;font-weight:bold;}';
   content += '@media print{body{margin:10mm;}}';
   content += '</style></head><body>';
   content += '<div class="header">';
@@ -2449,10 +2616,30 @@ function buildPrintWindow(isTeacher) {
       }
     }
     if (q.type === 'short') {
-      if (isTeacher && q.answer) {
-        content += '<div class="answer-section"><strong>Answer:</strong> ' + q.answer + '</div>';
+      // Show sub-questions if they exist
+      if (q.subQuestions && q.subQuestions.length > 0) {
+        for (var si = 0; si < q.subQuestions.length; si++) {
+          var sq = q.subQuestions[si];
+          content += '<div class="sub-q">(<strong>' + sq.label + '</strong>) ' + (sq.text || '') + ' <span style="font-size:0.75rem;color:#555;">[' + sq.marks + ' mark' + (sq.marks!==1?'s':'') + ']</span></div>';
+          if (isTeacher) {
+            content += '<div class="sub-q-answer"><strong>Answer:</strong> ' + (sq.answer || '(No answer provided)') + '</div>';
+          }
+        }
+        // ECZ Auto Mark badge
+        if (isTeacher && q.eczAutoMark) {
+          content += '<div style="margin-top:4px;font-size:0.75rem;color:#1a7a3f;"><span class="ecz-badge">ECZ AUTO MARK</span> — 100% if answers match exactly</div>';
+        }
+        // Also show legacy answer if present
+        if (isTeacher && q.answer) {
+          content += '<div class="answer-section"><strong>Legacy Answer:</strong> ' + q.answer + '</div>';
+        }
       } else {
-        content += '<div style="border-bottom:1px solid #aaa;height:26px;margin-top:6px;"></div><div style="border-bottom:1px solid #aaa;height:26px;margin-top:4px;"></div>';
+        // Legacy short answer
+        if (isTeacher && q.answer) {
+          content += '<div class="answer-section"><strong>Answer:</strong> ' + q.answer + '</div>';
+        } else {
+          content += '<div style="border-bottom:1px solid #aaa;height:26px;margin-top:6px;"></div><div style="border-bottom:1px solid #aaa;height:26px;margin-top:4px;"></div>';
+        }
       }
     }
     if (q.type === 'essay') {
@@ -3370,6 +3557,8 @@ function parseAIResponse(text, mcqMarks, longMarks) {
         q.type = 'short';
         q.answer = item.answer || '';
         q.marks = item.marks || longMarks;
+        q.subQuestions = [];
+        q.eczAutoMark = false;
       } else if (item.type === 'essay') {
         q.type = 'essay';
         q.guidance = item.guidance || item.answer || '';
@@ -4183,22 +4372,7 @@ function teSaveRecord(rec) {
 }
 
 function renderPerfRecords() {
-  var records = teGetRecords();
-  
-  // Merge with cloud records if available
-  if (typeof cloudPerfRecords !== 'undefined' && cloudPerfRecords && cloudPerfRecords.length > 0) {
-    // Merge local and cloud, deduplicate by cloudId or timestamp
-    var merged = {};
-    for (var i = 0; i < records.length; i++) {
-      var key = records[i].cloudId || records[i].timestamp || ('local_' + i);
-      merged[key] = records[i];
-    }
-    for (var j = 0; j < cloudPerfRecords.length; j++) {
-      var ckey = cloudPerfRecords[j].cloudId || cloudPerfRecords[j].timestamp || ('cloud_' + j);
-      merged[ckey] = cloudPerfRecords[j];
-    }
-    records = Object.values(merged);
-  }
+  var records    = teGetRecords();
   var subjFilter = (document.getElementById('perf-subj-filter') || {}).value || '';
   var search     = ((document.getElementById('perf-search') || {}).value || '').toLowerCase();
 
@@ -4842,7 +5016,11 @@ function addNextQuestion(qid) {
     ];
     newQ.correct = 'A';
   }
-  if (qType === 'short') { newQ.answer   = ''; }
+  if (qType === 'short') {
+    newQ.answer = '';
+    newQ.subQuestions = [];
+    newQ.eczAutoMark = false;
+  }
   if (qType === 'essay') { newQ.guidance = ''; }
 
   examState.questions.splice(qIdx + 1, 0, newQ);
@@ -5275,7 +5453,6 @@ function cloudConnect(cfg) {
     cloudSetStatus(true, 'Connected — Realtime Database (FREE) ✔');
     liveLoadPublishedExams();
     liveRefresh();
-    initPerfRecordsSync();
     showToast('Firebase Realtime Database connected!');
   } catch(e) {
     cloudSetStatus(false, 'Connection error: ' + e.message);
@@ -5500,61 +5677,6 @@ function liveRefresh() {
     var tableEl = document.getElementById('live-results-table');
     if (tableEl) tableEl.innerHTML = '<div style="color:#e74c3c;padding:12px;">Error: ' + err.message + '</div>';
   });
-}
-
-// ── Performance Records Cloud Sync ───────────────────────────────────────────
-var cloudPerfRecords = [];
-var perfUnsub = null;
-
-function initPerfRecordsSync() {
-  if (!cloudDB) return;
-  
-  // Unsubscribe previous listener
-  if (perfUnsub) {
-    try { cloudDB.ref('mtc_performance_records').off('value', perfUnsub); } catch(e) {}
-    perfUnsub = null;
-  }
-  
-  // Listen for real-time updates to performance records
-  perfUnsub = function(snapshot) {
-    var data = snapshot.val() || {};
-    cloudPerfRecords = [];
-    
-    // Convert Firebase object to array
-    for (var key in data) {
-      if (data.hasOwnProperty(key)) {
-        var rec = data[key];
-        rec.cloudId = key;
-        cloudPerfRecords.push(rec);
-      }
-    }
-    
-    // Sort by timestamp (newest first)
-    cloudPerfRecords.sort(function(a, b) {
-      return (b.timestamp || b.submittedAt || '').localeCompare(a.timestamp || a.submittedAt || '');
-    });
-    
-    // Re-render performance records
-    if (typeof renderPerfRecords === 'function') {
-      renderPerfRecords();
-    }
-    
-    // Update sync status
-    if (typeof addSyncLog === 'function') {
-      addSyncLog('info', 'Performance records synced: ' + cloudPerfRecords.length + ' total');
-    }
-  };
-  
-  cloudDB.ref('mtc_performance_records').on('value', perfUnsub, function(error) {
-    console.error('Performance records sync error:', error);
-    if (typeof addSyncLog === 'function') {
-      addSyncLog('error', 'Performance sync failed: ' + error.message);
-    }
-  });
-  
-  if (typeof addSyncLog === 'function') {
-    addSyncLog('success', 'Performance records cloud sync initialized');
-  }
 }
 
 function liveFilterResults() { liveRefresh(); }
