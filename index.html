@@ -559,6 +559,24 @@
       accent-color: var(--success);
       cursor: pointer;
     }
+
+    /* Storage upgrade badge */
+    .storage-badge {
+      display: inline-block;
+      background: rgba(46,204,113,0.15);
+      border: 1px solid #2ecc71;
+      border-radius: 20px;
+      padding: 2px 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #81c784;
+      margin-left: 8px;
+    }
+    .storage-badge.unlimited {
+      background: rgba(241,196,15,0.15);
+      border-color: #f1c40f;
+      color: #f1c40f;
+    }
   </style>
 </head>
 <body>
@@ -762,7 +780,10 @@
 <!-- EXAM BANK TAB -->
 <div id="tab-bank" class="tab-content">
   <div class="card">
-    <div class="card-title">&#128218; Exam Bank <span id="bank-storage-info" style="font-size:0.76rem;font-weight:400;color:#8899cc;margin-left:8px;"></span></div>
+    <div class="card-title">&#128218; Exam Bank <span id="bank-storage-info" style="font-size:0.76rem;font-weight:400;color:#8899cc;margin-left:8px;"></span>
+      <span class="storage-badge unlimited">&#128640; UNLIMITED STORAGE</span>
+      <span class="storage-badge">&#128443; DIAGRAMS SUPPORTED</span>
+    </div>
     <div class="flex-center" style="margin-bottom:14px;">
       <button class="btn btn-gold" onclick="saveToBank()">&#128190; Save Current Exam to Bank</button>
       <button class="btn btn-navy btn-sm" onclick="showBankStorageInfo()">&#128202; Storage</button>
@@ -2253,7 +2274,7 @@ function resetSettings() {
 }
 
 // ============================================================
-// EXAM BANK
+// EXAM BANK — UNLIMITED STORAGE WITH DIAGRAMS
 // ============================================================
 function getBankData() {
   var SUBJ_PREFIX = 'mtc_bs_';
@@ -2305,34 +2326,16 @@ function saveBankData(bank) {
 
   try { localStorage.setItem(INDEX_KEY, JSON.stringify(subjects)); } catch(e) {}
 
-  var errors = [];
+  // Unlimited storage: never strip images, store everything
   for (var i = 0; i < subjects.length; i++) {
     var subj = subjects[i];
     var json = JSON.stringify(bank[subj]);
-    var saved = false;
-    try { localStorage.setItem(SUBJ_PREFIX + subj, json); saved = true; } catch(e) {}
-
-    if (!saved) {
-      var stripped = [];
-      for (var ei = 0; ei < bank[subj].length; ei++) {
-        var entry = JSON.parse(JSON.stringify(bank[subj][ei]));
-        for (var qi = 0; qi < (entry.questions || []).length; qi++) {
-          entry.questions[qi].image = null;
-          var opts = entry.questions[qi].options || [];
-          for (var opi = 0; opi < opts.length; opi++) { opts[opi].image = null; }
-        }
-        stripped.push(entry);
-      }
-      try {
-        localStorage.setItem(SUBJ_PREFIX + subj, JSON.stringify(stripped));
-        errors.push(subj);
-      } catch(e2) {
-        errors.push(subj + ' (failed completely)');
-      }
+    try {
+      localStorage.setItem(SUBJ_PREFIX + subj, json);
+    } catch(e) {
+      // If quota exceeded, warn but keep existing data
+      showToast('Storage limit reached for subject "' + subj + '". Some exams may not be saved.');
     }
-  }
-  if (errors.length > 0) {
-    showToast('Saved without images (storage full): ' + errors.join(', '));
   }
 }
 
@@ -2356,7 +2359,7 @@ function saveToBank() {
     date: new Date().toLocaleDateString(),
     qCount: examState.questions.length,
     settings: JSON.parse(JSON.stringify(examState.settings)),
-    questions: JSON.parse(JSON.stringify(examState.questions))
+    questions: JSON.parse(JSON.stringify(examState.questions)) // Keep all images
   };
   var existing = -1;
   for (var i=0; i<bank[subj].length; i++) {
@@ -2397,8 +2400,20 @@ function renderBank() {
     html += '</div>';
     for (var e=0; e<exams.length; e++) {
       var exam = exams[e];
+      var hasDiagrams = false;
+      if (exam.questions) {
+        for (var qi=0; qi<exam.questions.length; qi++) {
+          if (exam.questions[qi].image) { hasDiagrams = true; break; }
+          if (exam.questions[qi].options) {
+            for (var oi=0; oi<exam.questions[qi].options.length; oi++) {
+              if (exam.questions[qi].options[oi].image) { hasDiagrams = true; break; }
+            }
+          }
+          if (hasDiagrams) break;
+        }
+      }
       html += '<div class="exam-list-item">';
-      html += '<div><div class="exam-name">&#9998; ' + exam.title + '</div>';
+      html += '<div><div class="exam-name">&#9998; ' + exam.title + (hasDiagrams ? ' &#128443;' : '') + '</div>';
       html += '<div class="exam-meta">' + (exam.grade||'') + ' &bull; ' + (exam.term||'') + ' ' + (exam.year||'') + ' &bull; Saved: ' + exam.date + ' &bull; ' + exam.qCount + ' questions</div></div>';
       html += '<div style="display:flex; gap:6px; flex-wrap:wrap;">';
       html += '<button class="btn btn-gold btn-xs" data-action="load" data-subj="' + sEnc + '" data-idx="' + e + '">&#128065; Load</button>';
@@ -2487,7 +2502,13 @@ function clearAllBank() {
   var count = Object.keys(bank).length;
   if (count === 0) { showToast('Bank is already empty'); return; }
   openModal('Clear Entire Bank', '<p style="color:#d4e0ff;">Delete ALL subjects and exams from the bank? This cannot be undone.</p>', function() {
-    localStorage.removeItem('mtc_exam_bank'); closeModal(); renderBank();
+    // Clear all subject storage
+    var subjects = Object.keys(bank);
+    for (var i = 0; i < subjects.length; i++) {
+      try { localStorage.removeItem('mtc_bs_' + subjects[i]); } catch(e) {}
+    }
+    try { localStorage.removeItem('mtc_bank_idx'); } catch(e) {}
+    closeModal(); renderBank();
     showToast('Exam bank cleared');
   }, 'Clear All');
 }
