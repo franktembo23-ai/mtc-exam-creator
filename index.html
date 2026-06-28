@@ -577,6 +577,30 @@
       border-color: #f1c40f;
       color: #f1c40f;
     }
+
+    /* Live Results Sync */
+    .live-sync-badge {
+      display: inline-block;
+      background: rgba(46,204,113,0.15);
+      border: 1px solid #2ecc71;
+      border-radius: 20px;
+      padding: 2px 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #81c784;
+      margin-left: 8px;
+      animation: pulse-badge 2s infinite;
+    }
+    @keyframes pulse-badge {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .live-sync-badge.offline {
+      background: rgba(231,76,60,0.15);
+      border-color: #e74c3c;
+      color: #e74c3c;
+      animation: none;
+    }
   </style>
 </head>
 <body>
@@ -1102,6 +1126,7 @@
           <input type="text" id="perf-search" placeholder="Search student..." style="width:160px;font-size:0.8rem;padding:5px 10px;" oninput="renderPerfRecords()">
           <button class="btn btn-navy btn-sm" onclick="exportPerfCSV()">&#128229; Export CSV</button>
           <button class="btn btn-danger btn-sm" onclick="clearPerfRecords()">&#128465; Clear All</button>
+          <span class="live-sync-badge" id="perf-sync-badge">&#8635; Live Sync</span>
         </div>
       </div>
       <div id="perf-summary" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
@@ -1279,7 +1304,7 @@
 <!-- ── LIVE RESULTS DASHBOARD ───────────────────────────────── -->
 <div class="card">
   <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:8px;">
-    <span>&#128202; Live Results Dashboard</span>
+    <span>&#128202; Live Results Dashboard <span class="live-sync-badge" id="live-sync-badge">&#8635; LIVE</span></span>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <span id="live-results-count" style="font-size:0.8rem;color:#8899cc;"></span>
       <select id="live-exam-filter" style="font-size:0.8rem;padding:5px 10px;min-width:180px;" onchange="liveFilterResults()">
@@ -6692,34 +6717,46 @@ setInterval(function() {
 // ============================================================
 // INIT — Check session and start app
 // ============================================================
-if (!checkSession()) {
-  document.getElementById('login-gate').style.display = 'flex';
-  document.getElementById('tab-bar').style.display = 'none';
-  document.getElementById('main').style.display = 'none';
-  document.getElementById('sync-status-bar').style.display = 'none';
-  document.getElementById('logout-btn').style.display = 'none';
-} else {
-  // Already logged in, app shown by enterApp
+// FIX: Wrap init in try-catch to prevent blank page on startup
+try {
+  if (!checkSession()) {
+    document.getElementById('login-gate').style.display = 'flex';
+    document.getElementById('tab-bar').style.display = 'none';
+    document.getElementById('main').style.display = 'none';
+    document.getElementById('sync-status-bar').style.display = 'none';
+    document.getElementById('logout-btn').style.display = 'none';
+  } else {
+    // Already logged in, app shown by enterApp
+  }
+
+  updateHeaderDisplay();
+  renderBank();
+  initCloudTab();
+  initPasteHandlers();
+  renderPublishedList();
+  initAIPanel();
+  renderTEExamList();
+  renderPerfRecords();
+  eiRefreshSubjectList();
+  eiInitDropZone();
+
+  // Init maths keyboard after DOM ready
+  setTimeout(function() {
+    initMathKeyboard();
+    startMathKeyboardObserver();
+  }, 500);
+
+  setTimeout(initSync, 2000);
+} catch(e) {
+  console.error('Init error:', e);
+  // Show a fallback error message
+  var loginGate = document.getElementById('login-gate');
+  if (loginGate) {
+    loginGate.style.display = 'flex';
+    var errorEl = document.getElementById('login-error-student');
+    if (errorEl) errorEl.textContent = 'Loading error. Please refresh the page.';
+  }
 }
-
-updateHeaderDisplay();
-renderBank();
-initCloudTab();
-initPasteHandlers();
-renderPublishedList();
-initAIPanel();
-renderTEExamList();
-renderPerfRecords();
-eiRefreshSubjectList();
-eiInitDropZone();
-
-// Init maths keyboard after DOM ready
-setTimeout(function() {
-  initMathKeyboard();
-  startMathKeyboardObserver();
-}, 500);
-
-setTimeout(initSync, 2000);
 
 window.logout = logout;
 </script>
